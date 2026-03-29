@@ -12,8 +12,14 @@ const router = express.Router();
 
 router.post(
   "/detectFile",
-  uploadMemory.array("files", 15),
+  uploadMemory.single("file"),
   asyncHandler(convertorController.detectFile),
+);
+
+router.post(
+  "/convert",
+  uploadMemory.single("file"),
+  asyncHandler(convertorController.convertFile),
 );
 
 router.post(

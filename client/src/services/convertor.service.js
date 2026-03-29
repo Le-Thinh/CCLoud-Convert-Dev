@@ -1,14 +1,51 @@
 "use strict";
 
-import { detectFile } from "../api/convert";
+import { convert, detectFile } from "../api/convert";
 
 export const detectFiles = async (files) => {
-  const fd = new FormData();
-  for (const file of files) {
-    fd.append("files", file);
-  }
-  const { data } = await detectFile(fd);
-  if (!data) throw new Error("Something wrong when get file from client");
+  const results = await Promise.allSettled(
+    files.map(async (file) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      const { data } = await detectFile(fd);
 
-  return data.metadata.files;
+      return { filename: file.name, success: true, ...data.metadata };
+    }),
+  );
+
+  return results.map((r, i) =>
+    r.status === "fulfilled"
+      ? r.value
+      : { filename: files[i].name, success: false, error: r.reason?.message },
+  );
+};
+
+export const convertMain = async (entries) => {
+  const results = await Promise.allSettled(
+    entries.map(async (entry) => {
+      const { file, targetMime, opts = {} } = entry;
+
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("targetMime", targetMime);
+
+      // opts nếu có — ví dụ quality, margin, resize
+      if (Object.keys(opts).length > 0) {
+        fd.append("opts", JSON.stringify(opts));
+      }
+
+      const { data } = await convert(fd);
+      return { filename: file.name, success: true, ...data.metadata };
+    }),
+  );
+
+  return results.map((r, i) =>
+    r.status === "fulfilled"
+      ? r.value
+      : {
+          filename: entries[i].file.name,
+          success: false,
+          error: r.reason?.message ?? "Conversion failed",
+        },
+  );
 };

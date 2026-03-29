@@ -1418,18 +1418,18 @@ const CONVERSION_MATRIX = {
         "text/plain",
       ],
       image: [
-        "image/avif",
-        "image/bmp",
-        "application/postscript", //eps
-        "image/gif",
-        "image/x-icon",
-        "image/jpeg",
-        "application/vnd.oasis.opendocument.database", //odd
-        "image/png",
-        "application/postscript", //ps
-        "image/vnd.adobe.photoshop", //psd
-        "image/tiff",
-        "image/webp",
+        // "image/avif",
+        // "image/bmp",
+        // "application/postscript", //eps
+        // "image/gif",
+        // "image/x-icon",
+        // "image/jpeg",
+        // "application/vnd.oasis.opendocument.database", //odd
+        // "image/png",
+        // "application/postscript", //ps
+        // "image/vnd.adobe.photoshop", //psd
+        // "image/tiff",
+        // "image/webp",
       ],
     },
     convertFrom: {},

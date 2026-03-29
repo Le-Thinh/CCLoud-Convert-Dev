@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import FileRow from "../components/ui/FileRow";
 import { FEATURES } from "../assets/features";
 import { convertToPdf } from "../api/convert";
-import { detectFiles } from "../services/convertor.service";
+import { convertMain, detectFiles } from "../services/convertor.service";
 import { flattenSuggest } from "../utils";
 import { toast } from "react-toastify";
 
@@ -20,46 +20,27 @@ const createEntry = (file) => ({
 });
 
 const HomePage = () => {
-  const convertOne = async (entry) => {
-    const { file, targetMime } = entry;
-    const fd = new FormData();
-    fd.append("file", file);
-
-    if (targetMime === "application/pdf") {
-      fd.append("options", JSON.stringify({ margin: 40 }));
-      const { data } = await convertToPdf(fd);
-      return data.metadata;
-    }
-
-    fd.append(
-      "options",
-      JSON.stringify({
-        targetMime,
-        resize: { strip: true },
-        quality: 85,
-      }),
-    );
-    const { data } = await convertToPdf(fd);
-    return data.metadata;
-  };
-
   const handleConvertAll = async () => {
     const pending = entries.filter((e) => e.targetMime && e.status !== "done");
     if (pending.length === 0) return;
 
     setConverting(true);
-    await Promise.allSettled(
-      pending.map(async (entry) => {
-        updateEntry(setEntries, entry.id, { status: "converting" });
-        try {
-          const result = await convertOne(entry);
-          updateEntry(setEntries, entry.id, { status: "done", result });
-        } catch (err) {
-          const msg = err.response?.data?.message ?? "Conversion failed";
-          updateEntry(setEntries, entry.id, { status: "error", error: msg });
-        }
-      }),
+
+    pending.forEach((entry) =>
+      updateEntry(setEntries, entry.id, { status: "converting" }),
     );
+
+    const results = await convertMain(pending);
+
+    results.forEach((r, i) => {
+      const id = pending[i].id;
+      if (r.success) {
+        updateEntry(setEntries, id, { status: "done", result: r });
+      } else {
+        updateEntry(setEntries, id, { status: "error", error: r.error });
+      }
+    });
+
     setConverting(false);
   };
 
@@ -78,14 +59,31 @@ const HomePage = () => {
   const [converting, setConverting] = useState(false);
 
   const addFiles = async (incoming) => {
-    if (entries === 10) return toast.error("Limit 10 files each");
+    const MAX_FILES = 10;
+
+    if (entries.length === 10) return toast.error("Limit 10 files each");
 
     const existingIds = new Set(entries.map((e) => e.id));
 
-    const newFiles = [...incoming].filter(
+    const dedupedNew = [...incoming].filter(
       (f) => !existingIds.has(`${f.name}-${f.size}`),
     );
-    if (newFiles.length === 0) return;
+
+    if (dedupedNew.length === 0) return;
+
+    const remaining = MAX_FILES - entries.length;
+
+    if (remaining <= 0) {
+      toast.warning("Limit reached. Maximum 10 files at a time.");
+      return;
+    }
+
+    const newFiles = dedupedNew.slice(0, remaining);
+    if (newFiles.length < dedupedNew.length) {
+      toast.info(
+        `Only ${newFiles.length} of ${dedupedNew.length} files added. Maximum is ${MAX_FILES} files at a time.`,
+      );
+    }
     const newEntries = newFiles.map(createEntry);
     setEntries((prev) => [...prev, ...newEntries]);
 

@@ -3,6 +3,7 @@
 const fs = require("fs").promises;
 const { Types } = require("mongoose");
 const { NotFoundError } = require("../core/error.response");
+const { sanitizeFilename } = require("../helper");
 
 const A4 = { width: 595.28, height: 841.89 }; // in points (1/72 inch)
 
@@ -20,6 +21,11 @@ const validateFileExists = async (filePath, retries = 3) => {
       await wait(50);
     }
   }
+};
+
+const buildFileName = (original, ext) => {
+  const base = original.replace(/\.[^.]+$/, "");
+  return sanitizeFilename(`${base}.${ext}`);
 };
 
 const fitDimensions = (imgWidth, imgHeight, margin = 40) => {
@@ -47,4 +53,5 @@ module.exports = {
   convertToObjectMongoId,
   A4,
   fitDimensions,
+  buildFileName,
 };

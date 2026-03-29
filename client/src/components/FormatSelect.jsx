@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   FORMAT_CATEGORIES,
   FORMAT_MIME_MAP,
@@ -6,13 +6,12 @@ import {
   getLabel,
   getMime,
 } from "../configs/format.config";
-import { detectFile } from "../api/convert";
 
 const FormatSelect = ({ value, onChange, allowedMimes }) => {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [suggestedFmt, setSuggestedFmt] = useState({});
   const [activeCategory, setActive] = useState("Image");
+
   const ref = useRef(null);
   const searchRef = useRef(null);
 
@@ -20,33 +19,42 @@ const FormatSelect = ({ value, onChange, allowedMimes }) => {
     const handler = (e) => {
       if (ref.current && !ref.current.contains(e.target)) setOpen(false);
     };
+
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
   useEffect(() => {
-    if (open) setTimeout(() => searchRef.current?.focus(), 50);
+    if (open) {
+      requestAnimationFrame(() => {
+        searchRef.current?.focus();
+      });
+    }
   }, [open]);
 
-  const displayFormats = search.trim()
-    ? FORMAT_CATEGORIES.flatMap((c) => c.formats)
-        .filter((f, i, arr) => arr.indexOf(f) === i) // dedupe
-        .filter((f) => f.toLowerCase().includes(search.toLowerCase()))
-    : (FORMAT_CATEGORIES.find((c) => c.label === activeCategory)?.formats ??
-      []);
+  const allFormats = useMemo(
+    () => [...new Set(FORMAT_CATEGORIES.flatMap((c) => c.formats))],
+    [],
+  );
+
+  //filter
+  const formats = useMemo(() => {
+    if (search.trim()) {
+      return allFormats.filter((f) =>
+        f.toLowerCase().includes(search.toLowerCase()),
+      );
+    }
+
+    return (
+      FORMAT_CATEGORIES.find((c) => c.label === activeCategory)?.formats ?? []
+    );
+  }, [search, activeCategory, allFormats]);
 
   const isAllowed = (label) => {
     if (!allowedMimes || allowedMimes.length === 0) return true;
     const mime = getMime(label);
     return mime ? allowedMimes.includes(mime) : false;
   };
-
-  const baseFormats = search.trim()
-    ? FORMAT_CATEGORIES.flatMap((c) => c.formats)
-        .filter((f, i, arr) => arr.indexOf(f) === i)
-        .filter((f) => f.toLowerCase().includes(search.toLowerCase()))
-    : (FORMAT_CATEGORIES.find((c) => c.label === activeCategory)?.formats ??
-      []);
 
   const getCategoryCount = (cat) => {
     if (!allowedMimes || allowedMimes.length === 0) return null;
@@ -186,13 +194,13 @@ const FormatSelect = ({ value, onChange, allowedMimes }) => {
 
             {/* Right — format buttons */}
             <div className="flex-1 p-3 overflow-y-auto">
-              {baseFormats.length === 0 ? (
+              {formats.length === 0 ? (
                 <p className="text-[12px] text-zinc-400 text-center mt-6">
                   No formats found
                 </p>
               ) : (
                 <div className="grid grid-cols-3 gap-1.5">
-                  {baseFormats.map((fmt) => {
+                  {formats.map((fmt) => {
                     const allowed = isAllowed(fmt);
                     const selected = displayValue === fmt;
                     return (

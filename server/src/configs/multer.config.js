@@ -34,6 +34,7 @@ const ALLOWED_MIME_TYPES = [
   "image/webp",
   "image/gif",
   "image/tiff",
+  "image/avif",
   "image/svg+xml",
   "application/pdf",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",

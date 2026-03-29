@@ -23,6 +23,7 @@ const {
   convertToObjectMongoId,
   fitDimensions,
   A4,
+  buildFileName,
 } = require("../utils");
 const { fileTypeFromFile, fileTypeFromBuffer } = require("file-type");
 const {
@@ -34,6 +35,36 @@ const { sanitizeFilename } = require("../helper");
 const ConversionJobRepo = require("../models/repositories/conversion-job.model");
 
 const { PDFDocument } = require("pdf-lib");
+
+const isImage = (mime) => mime.startsWith("image/");
+const isPdf = (mime) => mime === "application/pdf";
+const isDoc = (mime) =>
+  mime.startsWith("application/vnd") || mime === "application/msword";
+
+const uploadPair = async ({
+  buffer,
+  mimeType,
+  previewKey,
+  downloadKey,
+  filename,
+}) => {
+  await Promise.all([
+    uploadToS3({
+      buffer,
+      key: previewKey,
+      mimeType,
+      filename,
+      disposition: "inline",
+    }),
+    uploadToS3({
+      buffer,
+      key: downloadKey,
+      mimeType,
+      filename,
+      disposition: "attachment",
+    }),
+  ]);
+};
 
 class ConvertorService {
   /**
@@ -78,7 +109,33 @@ class ConvertorService {
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
   }
 
-  static convert = async (file) => {};
+  static convert = async ({ file, targetMime, opts = {}, userId = null }) => {
+    //1. Validate
+    if (!file?.buffer) throw new BadRequestError("file.buffer is required");
+    if (!file?.originalname)
+      throw new BadRequestError("file.originalname is required");
+    if (!targetMime) throw new BadRequestError("targetMime is required");
+
+    const detected = await fileTypeFromBuffer(file.buffer);
+    if (!detected) throw new UnsupportedFormatError("Cannot detect file type");
+
+    const sourceMime = detected.mime;
+
+    if (!canConvert(sourceMime, targetMime))
+      throw new UnsupportedFormatError(
+        `Conversion not allowed: ${sourceMime} → ${targetMime}`,
+      );
+
+    if (isImage(sourceMime) && isPdf(targetMime)) {
+      return await this.convertImageToPdf(file, opts, userId);
+    }
+
+    if (isImage(sourceMime) && isImage(targetMime)) {
+      return await this.convertFileImage(file, targetMime);
+    }
+
+    return -1;
+  };
 
   static convertFileImage = async (file, targetMime, overrideOptions = {}) => {
     //1. Validate
@@ -126,25 +183,39 @@ class ConvertorService {
     const fileNameConverted = `${baseName}.${targetConfig.method}`;
     const originalKey = `upload/${fileNameOrigin}`;
     const convertedKey = `converted/${fileNameConverted}`;
+    const filenameDownload = buildFileName(
+      file.originalname,
+      targetConfig.method,
+    );
+
+    const originalPreviewKey = `upload/preview/${fileNameOrigin}`;
+    const originalDownloadKey = `upload/download/${fileNameOrigin}`;
+    const convertedPreviewKey = `converted/preview/${fileNameConverted}`;
+    const convertedDownloadKey = `converted/download/${fileNameConverted}`;
 
     await Promise.all([
-      uploadToS3({
+      uploadPair({
         buffer: file.buffer,
-        key: originalKey,
         mimeType: sourceMime,
+        previewKey: originalPreviewKey,
+        downloadKey: originalDownloadKey,
+        filename: fileNameOrigin,
       }),
-      uploadToS3({
+      uploadPair({
         buffer: outputBuffer,
-        key: convertedKey,
         mimeType: targetMime,
+        previewKey: convertedPreviewKey,
+        downloadKey: convertedDownloadKey,
+        filename: fileNameConverted,
       }),
     ]);
 
     //4. Get Url Signed From CloudFront
-    const [originalUrl, convertedUrl] = [
-      getUrlSignedFromCloudFront(originalKey),
-      getUrlSignedFromCloudFront(convertedKey),
-    ];
+    const originalUrlPreview = getUrlSignedFromCloudFront(originalPreviewKey);
+    const originalUrlDownload = getUrlSignedFromCloudFront(originalDownloadKey);
+    const convertedUrlPreview = getUrlSignedFromCloudFront(convertedPreviewKey);
+    const convertedUrlDownload =
+      getUrlSignedFromCloudFront(convertedDownloadKey);
 
     const original = {
       key: originalKey,
@@ -174,9 +245,11 @@ class ConvertorService {
     return {
       success: true,
       metadata: {
-        originalUrl,
-        convertedUrl,
-
+        originalUrlPreview,
+        convertedUrlPreview,
+        originalUrlDownload,
+        convertedUrlDownload,
+        filenameDownload: filenameDownload,
         source: {
           key: originalKey,
           mime: sourceMime,
@@ -324,26 +397,39 @@ class ConvertorService {
     const fileName = generateUniqueFilename(file.originalname);
     const baseName = fileName.replace(/\.[^.]+$/, "");
     const originalKey = `upload/${fileName}`;
+    const convertedFileName = `${baseName}.pdf`;
     const pdfKey = `converted/${baseName}.pdf`;
 
+    const filenameDownload = buildFileName(file.originalname, "pdf");
+
+    const originalPreviewKey = `upload/preview/${fileName}`;
+    const originalDownloadKey = `upload/download/${fileName}`;
+    const convertedPreviewKey = `converted/preview/${convertedFileName}`;
+    const convertedDownloadKey = `converted/download/${convertedFileName}`;
+
     await Promise.all([
-      uploadToS3({
+      uploadPair({
         buffer: file.buffer,
-        key: originalKey,
         mimeType: sourceMime,
+        previewKey: originalPreviewKey,
+        downloadKey: originalDownloadKey,
+        filename: fileName,
       }),
-      uploadToS3({
+      uploadPair({
         buffer: pdfBuffer,
-        key: pdfKey,
         mimeType: "application/pdf",
+        previewKey: convertedPreviewKey,
+        downloadKey: convertedDownloadKey,
+        filename: convertedFileName,
       }),
     ]);
 
     // ── 5. CloudFront Signed URLs
-    const [originalUrl, convertedUrl] = [
-      getUrlSignedFromCloudFront(originalKey),
-      getUrlSignedFromCloudFront(pdfKey),
-    ];
+    const originalUrlPreview = getUrlSignedFromCloudFront(originalPreviewKey);
+    const originalUrlDownload = getUrlSignedFromCloudFront(originalDownloadKey);
+    const convertedUrlPreview = getUrlSignedFromCloudFront(convertedPreviewKey);
+    const convertedUrlDownload =
+      getUrlSignedFromCloudFront(convertedDownloadKey);
 
     //6. Save conversion job to DB
     const original = {
@@ -376,9 +462,11 @@ class ConvertorService {
     return {
       success: true,
       metadata: {
-        originalUrl,
-        convertedUrl,
-
+        originalUrlPreview,
+        convertedUrlPreview,
+        originalUrlDownload,
+        convertedUrlDownload,
+        filenameDownload: filenameDownload,
         source: {
           key: originalKey,
           mime: sourceMime,

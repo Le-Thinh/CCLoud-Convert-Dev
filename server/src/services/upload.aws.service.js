@@ -96,7 +96,13 @@ class UploadService {
     };
   };
 
-  static uploadToS3 = async ({ buffer, key, mimeType }) => {
+  static uploadToS3 = async ({
+    buffer,
+    key,
+    mimeType,
+    filename,
+    disposition = "inline",
+  }) => {
     if (!buffer || !key || !mimeType) {
       throw new NotFoundError("Missing required parameters");
     }
@@ -106,13 +112,14 @@ class UploadService {
       Key: key, //`${folder}/${nameFile}`
       Body: buffer,
       ContentType: mimeType,
+      ContentDisposition: `${disposition}; filename="${filename}"`,
     });
 
     await s3.send(command);
     return key;
   };
 
-  static getUrlSignedFromCloudFront = (key) => {
+  static getUrlSignedFromCloudFront = (key, disposition = "inline") => {
     const url = getSignedUrl({
       url: `${process.env.AWS_BUCKET_CLOUDFRONT_URL}/${key}`,
       keyPairId: process.env.AWS_BUCKET_CLOUDFRONT_KEY_PAIR_ID,

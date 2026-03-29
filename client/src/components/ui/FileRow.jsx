@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { fmtSize } from "../../utils";
+import { fmtSize, triggerDownload } from "../../utils";
 import FormatSelect from "../FormatSelect";
 import { StatusBadge } from "../../assets/statusFile";
 
@@ -7,21 +7,24 @@ const FileRow = ({
   file,
   targetMime,
   status,
+  allowedMimes,
   result,
   error,
   onRemove,
   onFormatChange,
 }) => {
-  const [targetFmt, setTargetFmt] = useState("");
   const ext = file.name.split(".").pop().toUpperCase();
   const isDone = status === "done";
   const isActive = status === "converting";
+  const id = `${file.name}-${file.size}`;
 
-  const handleFormat = (fmt) => {
-    setTargetFmt(fmt);
-    onFormatChange?.(file.name, fmt);
-  };
-
+  const meta = result?.metadata;
+  const convertedExt =
+    meta?.converted?.format?.toUpperCase() ??
+    targetMime?.split("/").pop().toUpperCase();
+  const downloadName = meta?.filenameDownload;
+  const urlPreview = meta?.convertedUrlPreview;
+  const urlDownload = meta?.convertedUrlDownload;
   return (
     <div
       className={`border rounded-xl bg-white w-full transition-all ${
@@ -80,7 +83,11 @@ const FileRow = ({
               />
             </svg>
             <span className="text-sm text-zinc-400">Convert to</span>
-            <FormatSelect value={targetMime} onChange={onFormatChange} />
+            <FormatSelect
+              allowedMimes={allowedMimes}
+              value={targetMime}
+              onChange={(mime) => onFormatChange(mime, id)}
+            />
           </div>
         )}
 
@@ -107,22 +114,45 @@ const FileRow = ({
         <div className="flex items-center justify-between px-5 pb-4 pt-0 gap-4">
           {/* Stats */}
           <div className="flex items-center gap-4 text-xs font-mono text-zinc-400">
-            <span>{result.source?.sizeFormatted}</span>
+            <div className="flex items-center gap-1.5">
+              <span className="bg-zinc-100 border border-zinc-200 rounded px-1.5 py-0.5 text-[11px] font-mono text-zinc-600">
+                {ext}
+              </span>
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 12 12"
+                fill="none"
+                className="text-zinc-400"
+              >
+                <path
+                  d="M2 6h8M7 3l3 3-3 3"
+                  stroke="currentColor"
+                  strokeWidth="1.3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <span className="bg-zinc-100 border border-zinc-200 rounded px-1.5 py-0.5 text-[11px] font-mono text-zinc-600">
+                {convertedExt}
+              </span>
+            </div>
+
+            <span>{result.metadata?.source?.sizeFormatted}</span>
             <span className="text-zinc-300">→</span>
-            <span>{result.converted?.sizeFormatted}</span>
-            {result.stats?.changePercent && (
+            <span>{result.metadata?.converted?.sizeFormatted}</span>
+            {result.metadata?.stats?.changePercent && (
               <span className="text-green-600 font-semibold">
-                {result.stats.changePercent}
+                {result.metadata?.stats.changePercent}
               </span>
             )}
           </div>
 
           {/* Actions */}
           <div className="flex items-center gap-2">
-            <a
-              href={result.convertedUrl}
-              target="_blank"
-              rel="noreferrer"
+            <button
+              onClick={() => triggerDownload(urlDownload, downloadName)}
+              disabled={!urlDownload}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 text-white text-xs font-medium rounded-md hover:bg-zinc-700 transition-colors"
             >
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -141,11 +171,10 @@ const FileRow = ({
                 />
               </svg>
               Download
-            </a>
+            </button>
+
             <button
-              onClick={() =>
-                window.open(result.metadata.convertedUrl, "_blank")
-              }
+              onClick={() => urlPreview && window.open(urlPreview, "_blank")}
               className="px-3 py-1.5 border border-zinc-200 text-zinc-500 text-xs rounded-md hover:bg-zinc-50 hover:text-zinc-800 transition-colors"
             >
               Preview

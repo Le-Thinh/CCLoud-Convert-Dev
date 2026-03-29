@@ -6,43 +6,37 @@ const convertorService = require("../services/convertor.service");
 
 class ConvertorController {
   detectFile = async (req, res, next) => {
-    const { files } = req;
-    if (!files || files.length === 0) {
+    const { file } = req;
+    if (!file || file.length === 0) {
       throw new BadRequestError(
         'No files uploaded. Send files with field name "files"',
       );
     }
 
-    const results = await Promise.all(
-      files.map(async (file) => {
-        try {
-          const detection = await convertorService.detectFileType(file);
-          return {
-            filename: file.originalname,
-            success: true,
-            ...detection.metadata,
-          };
-        } catch (error) {
-          return {
-            filename: file.originalname,
-            success: false,
-            error: error.message,
-          };
-        }
-      }),
-    );
-
-    const successCount = results.filter((r) => r.success).length;
-    const failedCount = files.length - successCount;
+    const detection = await convertorService.detectFileType(file);
+    if (!detection) throw new BadRequestError("Detected File Failure!!");
 
     new SuccessResponse({
-      message: `Detected ${successCount}/${files.length} file(s) successfully`,
-      metadata: {
-        total: files.length,
-        success: successCount,
-        failed: failedCount,
-        files: results,
-      },
+      message: `Detected successfully`,
+      metadata: detection.metadata,
+    }).send(res);
+  };
+
+  convertFile = async (req, res, next) => {
+    const { file } = req;
+    const { targetMime, ...opts } = req.body;
+
+    if (!file || file.length) {
+      throw new BadRequestError("File missing");
+    }
+
+    if (!targetMime) {
+      throw new BadRequestError("Target missing");
+    }
+
+    new SuccessResponse({
+      message: "File converted successfully",
+      metadata: await convertorService.convert({ file, targetMime, opts }),
     }).send(res);
   };
 
@@ -53,9 +47,11 @@ class ConvertorController {
       throw new BadRequestError("File Missing");
     }
 
+    const result = await convertorService.convertFileImage(file, targetMime);
+
     new SuccessResponse({
       message: "File converted successfully",
-      metadata: await convertorService.convertFileImage(file, targetMime),
+      metadata: result.metadata,
     }).send(res);
   };
 
@@ -63,7 +59,7 @@ class ConvertorController {
     const files = req.files;
     const { targetMimes: targetMimesRaw } = req.body;
 
-    if (!files || files.length === 0)
+    if (!files)
       throw new BadRequestError(
         'No files uploaded. Send files with field name "files"',
       );
