@@ -8,9 +8,21 @@ const { default: helmet } = require("helmet");
 const cors = require("cors");
 
 const app = express();
+
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://ccloud-convert-dev.vercel.app",
+];
+
 app.use(
   cors({
-    origin: "*",
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     credentials: true,
   }),
 );
