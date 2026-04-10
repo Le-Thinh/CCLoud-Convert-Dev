@@ -3,7 +3,6 @@ import Input from "../components/form/input/InputField";
 import { useNavigate } from "react-router-dom";
 import FileRow from "../components/ui/FileRow";
 import { FEATURES } from "../assets/features";
-import { convertToPdf } from "../api/convert";
 import { convertMain, detectFiles } from "../services/convertor.service";
 import { flattenSuggest } from "../utils";
 import { toast } from "react-toastify";
@@ -20,6 +19,18 @@ const createEntry = (file) => ({
 });
 
 const HomePage = () => {
+  const ACCEPTED = ".jpg,.jpeg,.png,.webp,.avif,.gif,.tiff,.bmp,.svg,.pdf";
+
+  const navigate = useNavigate();
+  const inputRef = useRef(null);
+  const [entries, setEntries] = useState([]);
+  // const [files, setFiles] = useState([]);
+  const [drag, setDrag] = useState(false);
+  const [converting, setConverting] = useState(false);
+  const setOpts = (id, opts) => updateEntry(setEntries, id, { opts });
+  const setOptsAll = (opts) =>
+    setEntries((prev) => prev.map((e) => ({ ...e, opts })));
+
   const handleConvertAll = async () => {
     const pending = entries.filter((e) => e.targetMime && e.status !== "done");
     if (pending.length === 0) return;
@@ -48,15 +59,6 @@ const HomePage = () => {
     setEntries((prev) =>
       prev.map((e) => (e.id === id ? { ...e, ...patch } : e)),
     );
-
-  const ACCEPTED = ".jpg,.jpeg,.png,.webp,.avif,.gif,.tiff,.bmp,.svg,.pdf";
-
-  const navigate = useNavigate();
-  const inputRef = useRef(null);
-  const [entries, setEntries] = useState([]);
-  // const [files, setFiles] = useState([]);
-  const [drag, setDrag] = useState(false);
-  const [converting, setConverting] = useState(false);
 
   const addFiles = async (incoming) => {
     const MAX_FILES = 10;
@@ -205,12 +207,15 @@ const HomePage = () => {
                   key={entry.id}
                   file={entry.file}
                   targetMime={entry.targetMime}
+                  opts={entry.opts ?? {}}
                   allowedMimes={entry.allowedMimes}
                   status={entry.status}
                   result={entry.result}
                   error={entry.error}
                   onRemove={() => removeEntry(entry.id)}
                   onFormatChange={(mime) => setTargetMime(entry.id, mime)}
+                  onOptsChange={(opts) => setOpts(entry.id, opts)}
+                  onOptsChangeAll={setOptsAll}
                 />
               ))}
             </div>

@@ -12,7 +12,11 @@ const {
   ALLOWED_MIME_TYPES,
   generateUniqueFilename,
 } = require("../configs/multer.config");
-const { SHARP_FORMAT_MAP } = require("../configs/sharp.config");
+const {
+  SHARP_FORMAT_MAP,
+  buildFormatOptions,
+  buildSharpPipeline,
+} = require("../configs/sharp.config");
 const {
   NotFoundError,
   UnsupportedFormatError,
@@ -29,6 +33,7 @@ const { fileTypeFromFile, fileTypeFromBuffer } = require("file-type");
 const {
   uploadToS3,
   getUrlSignedFromCloudFront,
+  getS3DownloadURL,
 } = require("./upload.aws.service");
 const path = require("path");
 const { sanitizeFilename } = require("../helper");
@@ -40,31 +45,6 @@ const isImage = (mime) => mime.startsWith("image/");
 const isPdf = (mime) => mime === "application/pdf";
 const isDoc = (mime) =>
   mime.startsWith("application/vnd") || mime === "application/msword";
-
-const uploadPair = async ({
-  buffer,
-  mimeType,
-  previewKey,
-  downloadKey,
-  filename,
-}) => {
-  await Promise.all([
-    uploadToS3({
-      buffer,
-      key: previewKey,
-      mimeType,
-      filename,
-      disposition: "inline",
-    }),
-    uploadToS3({
-      buffer,
-      key: downloadKey,
-      mimeType,
-      filename,
-      disposition: "attachment",
-    }),
-  ]);
-};
 
 class ConvertorService {
   /**
@@ -131,13 +111,15 @@ class ConvertorService {
     }
 
     if (isImage(sourceMime) && isImage(targetMime)) {
-      return await this.convertFileImage(file, targetMime);
+      return await this.convertFileImage(file, targetMime, opts);
     }
 
-    return -1;
+    throw new UnsupportedFormatError(
+      `No converter available: ${sourceMime} → ${targetMime}`,
+    );
   };
 
-  static convertFileImage = async (file, targetMime, overrideOptions = {}) => {
+  static convertFileImage = async (file, targetMime, opts = {}) => {
     //1. Validate
     if (!file?.buffer) throw new BadRequestError("file.buffer is required");
     if (!file?.originalname)
@@ -168,10 +150,16 @@ class ConvertorService {
     //2.Sharp Convert
     const sourceMeta = await sharp(file.buffer).metadata();
     const { method, options: defaultOptions } = targetConfig;
-    const finalOptions = { ...defaultOptions, ...overrideOptions };
 
-    const outputBuffer = await sharp(file.buffer)
-      [method](finalOptions)
+    //Merge Quality
+    const formatOptions = buildFormatOptions(
+      method,
+      defaultOptions,
+      opts.quality,
+    );
+
+    const outputBuffer = await buildSharpPipeline(sharp, file.buffer, opts)
+      [method](formatOptions)
       .toBuffer();
 
     const convertedMeta = await sharp(outputBuffer).metadata();
@@ -188,34 +176,29 @@ class ConvertorService {
       targetConfig.method,
     );
 
-    const originalPreviewKey = `upload/preview/${fileNameOrigin}`;
-    const originalDownloadKey = `upload/download/${fileNameOrigin}`;
-    const convertedPreviewKey = `converted/preview/${fileNameConverted}`;
-    const convertedDownloadKey = `converted/download/${fileNameConverted}`;
-
     await Promise.all([
-      uploadPair({
+      uploadToS3({
         buffer: file.buffer,
+        key: originalKey,
         mimeType: sourceMime,
-        previewKey: originalPreviewKey,
-        downloadKey: originalDownloadKey,
         filename: fileNameOrigin,
       }),
-      uploadPair({
+      uploadToS3({
         buffer: outputBuffer,
+        key: convertedKey,
         mimeType: targetMime,
-        previewKey: convertedPreviewKey,
-        downloadKey: convertedDownloadKey,
         filename: fileNameConverted,
       }),
     ]);
 
     //4. Get Url Signed From CloudFront
-    const originalUrlPreview = getUrlSignedFromCloudFront(originalPreviewKey);
-    const originalUrlDownload = getUrlSignedFromCloudFront(originalDownloadKey);
-    const convertedUrlPreview = getUrlSignedFromCloudFront(convertedPreviewKey);
-    const convertedUrlDownload =
-      getUrlSignedFromCloudFront(convertedDownloadKey);
+    const convertedUrlPreview = getUrlSignedFromCloudFront(convertedKey);
+
+    // Download → S3 presigned URL với attachment override
+    const convertedUrlDownload = await getS3DownloadURL(
+      convertedKey,
+      filenameDownload,
+    );
 
     const original = {
       key: originalKey,
@@ -235,7 +218,7 @@ class ConvertorService {
       converted: converted,
       targetFormat: targetMime,
       status: "completed",
-      options: overrideOptions,
+      options: opts,
     });
 
     if (!job) throw new Error("Failed to save conversion job to database");
@@ -245,9 +228,7 @@ class ConvertorService {
     return {
       success: true,
       metadata: {
-        originalUrlPreview,
         convertedUrlPreview,
-        originalUrlDownload,
         convertedUrlDownload,
         filenameDownload: filenameDownload,
         source: {
@@ -334,7 +315,7 @@ class ConvertorService {
   };
 
   static convertImageToPdf = async (file, opts = {}, userId = null) => {
-    const { margin = 40, scaleUp = false } = opts;
+    const { margin = 4, scaleUp = false, resize = null } = opts;
 
     //1. Validate
     if (!file?.buffer) throw new BadRequestError("file.buffer is required");
@@ -371,7 +352,10 @@ class ConvertorService {
 
     //3. Convert Image To PDF
     const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([A4.width, A4.height]);
+    const pageWidth = resize?.width ? parseInt(resize.width) : A4.width;
+    const pageHeight = resize?.height ? parseInt(resize.height) : A4.height;
+
+    const page = pdfDoc.addPage([pageWidth, pageHeight]);
 
     const finalEmbedMethod = PDF_EMBED_MAP[embedMime];
     const embeddedImage = await pdfDoc[finalEmbedMethod](embedBuffer);
@@ -381,7 +365,13 @@ class ConvertorService {
       height: drawHeight,
       x,
       y,
-    } = fitDimensions(imgMeta.width, imgMeta.height, margin);
+    } = fitDimensions(
+      imgMeta.width,
+      imgMeta.height,
+      margin,
+      pageWidth,
+      pageHeight,
+    );
 
     page.drawImage(embeddedImage, {
       x,
@@ -402,34 +392,27 @@ class ConvertorService {
 
     const filenameDownload = buildFileName(file.originalname, "pdf");
 
-    const originalPreviewKey = `upload/preview/${fileName}`;
-    const originalDownloadKey = `upload/download/${fileName}`;
-    const convertedPreviewKey = `converted/preview/${convertedFileName}`;
-    const convertedDownloadKey = `converted/download/${convertedFileName}`;
-
     await Promise.all([
-      uploadPair({
+      uploadToS3({
         buffer: file.buffer,
+        key: originalKey,
         mimeType: sourceMime,
-        previewKey: originalPreviewKey,
-        downloadKey: originalDownloadKey,
         filename: fileName,
       }),
-      uploadPair({
+      uploadToS3({
         buffer: pdfBuffer,
+        key: pdfKey,
         mimeType: "application/pdf",
-        previewKey: convertedPreviewKey,
-        downloadKey: convertedDownloadKey,
         filename: convertedFileName,
       }),
     ]);
 
     // ── 5. CloudFront Signed URLs
-    const originalUrlPreview = getUrlSignedFromCloudFront(originalPreviewKey);
-    const originalUrlDownload = getUrlSignedFromCloudFront(originalDownloadKey);
-    const convertedUrlPreview = getUrlSignedFromCloudFront(convertedPreviewKey);
-    const convertedUrlDownload =
-      getUrlSignedFromCloudFront(convertedDownloadKey);
+    const convertedUrlPreview = getUrlSignedFromCloudFront(pdfKey);
+    const convertedUrlDownload = await getS3DownloadURL(
+      pdfKey,
+      filenameDownload,
+    );
 
     //6. Save conversion job to DB
     const original = {
@@ -462,9 +445,7 @@ class ConvertorService {
     return {
       success: true,
       metadata: {
-        originalUrlPreview,
         convertedUrlPreview,
-        originalUrlDownload,
         convertedUrlDownload,
         filenameDownload: filenameDownload,
         source: {

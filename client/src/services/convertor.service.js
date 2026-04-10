@@ -32,6 +32,7 @@ export const convertMain = async (entries) => {
       // opts nếu có — ví dụ quality, margin, resize
       if (Object.keys(opts).length > 0) {
         fd.append("opts", JSON.stringify(opts));
+        console.log(opts);
       }
 
       const { data } = await convert(fd);

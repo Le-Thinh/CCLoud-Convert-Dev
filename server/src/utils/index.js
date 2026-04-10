@@ -28,9 +28,15 @@ const buildFileName = (original, ext) => {
   return sanitizeFilename(`${base}.${ext}`);
 };
 
-const fitDimensions = (imgWidth, imgHeight, margin = 40) => {
-  const maxWidth = A4.width - margin * 2;
-  const maxHeight = A4.height - margin * 2;
+const fitDimensions = (
+  imgWidth,
+  imgHeight,
+  margin = 40,
+  pageWidth = A4.width,
+  pageHeight = A4.height,
+) => {
+  const maxWidth = pageWidth - margin * 2;
+  const maxHeight = pageHeight - margin * 2;
 
   const widthRatio = maxWidth / imgWidth;
   const heightRatio = maxHeight / imgHeight;
@@ -40,8 +46,8 @@ const fitDimensions = (imgWidth, imgHeight, margin = 40) => {
   const drawWidth = imgWidth * scale;
   const drawHeight = imgHeight * scale;
 
-  const x = (A4.width - drawWidth) / 2;
-  const y = (A4.height - drawHeight) / 2;
+  const x = (pageWidth - drawWidth) / 2;
+  const y = (pageHeight - drawHeight) / 2;
 
   return { width: drawWidth, height: drawHeight, x, y };
 };

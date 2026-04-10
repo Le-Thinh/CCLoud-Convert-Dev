@@ -24,7 +24,7 @@ class ConvertorController {
 
   convertFile = async (req, res, next) => {
     const { file } = req;
-    const { targetMime, ...opts } = req.body;
+    const { targetMime, opts: optsRaw } = req.body;
 
     if (!file || file.length) {
       throw new BadRequestError("File missing");
@@ -32,6 +32,17 @@ class ConvertorController {
 
     if (!targetMime) {
       throw new BadRequestError("Target missing");
+    }
+
+    let opts = {};
+    if (optsRaw) {
+      try {
+        opts = JSON.parse(optsRaw);
+      } catch {
+        throw new BadRequestError(
+          'opts must be valid JSON. Example: {"quality":80,"flip":true}',
+        );
+      }
     }
 
     new SuccessResponse({

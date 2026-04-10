@@ -14,8 +14,10 @@ const {
   BadRequestError,
   UnsupportedFormatError,
 } = require("../core/error.response");
-// const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
-const { getSignedUrl } = require("@aws-sdk/cloudfront-signer");
+const {
+  getSignedUrl: getS3SignedUrl,
+} = require("@aws-sdk/s3-request-presigner");
+const { getSignedUrl: getCFNSignedUrl } = require("@aws-sdk/cloudfront-signer");
 const S3KeyRepository = require("../models/repositories/s3key.repo");
 const { getConversionSuggestion } = require("../configs/format.config");
 
@@ -96,13 +98,7 @@ class UploadService {
     };
   };
 
-  static uploadToS3 = async ({
-    buffer,
-    key,
-    mimeType,
-    filename,
-    disposition = "inline",
-  }) => {
+  static uploadToS3 = async ({ buffer, key, mimeType, filename }) => {
     if (!buffer || !key || !mimeType) {
       throw new NotFoundError("Missing required parameters");
     }
@@ -112,7 +108,7 @@ class UploadService {
       Key: key, //`${folder}/${nameFile}`
       Body: buffer,
       ContentType: mimeType,
-      ContentDisposition: `${disposition}; filename="${filename}"`,
+      ContentDisposition: `inline; filename="${filename}"`,
     });
 
     await s3.send(command);
@@ -120,13 +116,23 @@ class UploadService {
   };
 
   static getUrlSignedFromCloudFront = (key, disposition = "inline") => {
-    const url = getSignedUrl({
+    const url = getCFNSignedUrl({
       url: `${process.env.AWS_BUCKET_CLOUDFRONT_URL}/${key}`,
       keyPairId: process.env.AWS_BUCKET_CLOUDFRONT_KEY_PAIR_ID,
       privateKey: process.env.AWS_BUCKET_CLOUDFRONT_PRIVATE_KEY,
       dateLessThan: new Date(Date.now() + 2 * 60 * 60 * 1000), //2 hours
     });
     return url;
+  };
+
+  static getS3DownloadURL = async (key, filename) => {
+    const command = new GetObjectCommand({
+      Bucket: process.env.AWS_BUCKET_NAME,
+      Key: key,
+      ResponseContentDisposition: `attachment; filename="${filename}"`,
+    });
+
+    return await getS3SignedUrl(s3, command, { expiresIn: 7200 });
   };
 }
 

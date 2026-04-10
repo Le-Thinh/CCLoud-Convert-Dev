@@ -6,6 +6,7 @@ import {
   getLabel,
   getMime,
 } from "../configs/format.config";
+import TransformOptionsModal from "./modal/TransformOptionsModal";
 
 const FormatSelect = ({ value, onChange, allowedMimes }) => {
   const [open, setOpen] = useState(false);
@@ -100,26 +101,6 @@ const FormatSelect = ({ value, onChange, allowedMimes }) => {
             />
           </svg>
         </button>
-        {displayValue && (
-          <div className="border group border-zinc-200 rounded-md p-2 cursor-pointer hover:bg-[#202020] transition-colors">
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 14 14"
-              fill="none"
-              className="text-zinc-700 group-hover:text-white"
-            >
-              <path
-                d="M8.5 2a3 3 0 0 0-2.83 4L2 9.5 2.5 11.5l1.5.5L7.92 8.33A3 3 0 1 0 8.5 2z"
-                stroke="currentColor"
-                strokeWidth="1.3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <circle cx="8.5" cy="5" r="1" fill="currentColor" />
-            </svg>
-          </div>
-        )}
       </div>
 
       {/* Dropdown */}

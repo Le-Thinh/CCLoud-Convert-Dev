@@ -2,17 +2,23 @@ import React, { useState } from "react";
 import { fmtSize, triggerDownload } from "../../utils";
 import FormatSelect from "../FormatSelect";
 import { StatusBadge } from "../../assets/statusFile";
+import TransformOptionsModal from "../modal/TransformOptionsModal";
 
 const FileRow = ({
   file,
   targetMime,
   status,
   allowedMimes,
+  opts,
   result,
   error,
   onRemove,
   onFormatChange,
+  onOptsChange,
+  onOptsChangeAll,
 }) => {
+  const [modalOpen, setModalOpen] = useState(false);
+
   const ext = file.name.split(".").pop().toUpperCase();
   const isDone = status === "done";
   const isActive = status === "converting";
@@ -25,6 +31,7 @@ const FileRow = ({
   const downloadName = meta?.filenameDownload;
   const urlPreview = meta?.convertedUrlPreview;
   const urlDownload = meta?.convertedUrlDownload;
+
   return (
     <div
       className={`border rounded-xl bg-white w-full transition-all ${
@@ -57,7 +64,7 @@ const FileRow = ({
         {/* Status badge */}
         <StatusBadge status={status} />
 
-        {/* Convert to — hide khi converting/done */}
+        {/* Convert to — hide when converting/done */}
         {status !== "converting" && status !== "done" && (
           <div className="flex items-center gap-2.5 shrink-0">
             <svg
@@ -83,11 +90,36 @@ const FileRow = ({
               />
             </svg>
             <span className="text-sm text-zinc-400">Convert to</span>
+
             <FormatSelect
               allowedMimes={allowedMimes}
               value={targetMime}
               onChange={(mime) => onFormatChange(mime, id)}
             />
+
+            {targetMime && (
+              <button
+                onClick={() => setModalOpen(true)}
+                className="group border border-zinc-200 rounded-md p-2 cursor-pointer hover:bg-[#202020] transition-colors"
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 14 14"
+                  fill="none"
+                  className="text-zinc-700 group-hover:text-white transition-colors"
+                >
+                  <path
+                    d="M8.5 2a3 3 0 0 0-2.83 4L2 9.5 2.5 11.5l1.5.5L7.92 8.33A3 3 0 1 0 8.5 2z"
+                    stroke="currentColor"
+                    strokeWidth="1.3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <circle cx="8.5" cy="5" r="1" fill="currentColor" />
+                </svg>
+              </button>
+            )}
           </div>
         )}
 
@@ -189,6 +221,22 @@ const FileRow = ({
           <p className="text-xs text-red-500 font-mono">{error}</p>
         </div>
       )}
+
+      <TransformOptionsModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        filename={file.name}
+        targetMime={targetMime}
+        initialOpts={opts}
+        onApply={(newOpts) => {
+          onOptsChange?.(newOpts);
+          setModalOpen(false);
+        }}
+        onApplyAll={(newOpts) => {
+          onOptsChangeAll?.(newOpts);
+          setModalOpen(false);
+        }}
+      />
     </div>
   );
 };

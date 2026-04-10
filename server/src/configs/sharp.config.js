@@ -32,7 +32,93 @@ const MIME_TO_EXT = {
   "image/avif": "avif",
 };
 
+const FIT_MAP = {
+  max: "inside",
+  crop: "cover",
+  scale: "fill",
+  cover: "cover",
+  contain: "contain",
+  fill: "fill",
+  inside: "inside",
+  outside: "outside",
+};
+
+const mapPngQuality = (quality) => {
+  Math.round(((100 - Math.min(100, Math.max(1, quality))) / 100) * 9);
+};
+
+const buildFormatOptions = (method, defaultOptions, quality) => {
+  if (!quality) return defaultOptions;
+
+  switch (method) {
+    case "jpeg":
+      return {
+        ...defaultOptions,
+        quality: Math.min(100, Math.max(1, quality)),
+      };
+    case "webp":
+      return {
+        ...defaultOptions,
+        quality: Math.min(100, Math.max(1, quality)),
+      };
+    case "avif":
+      return {
+        ...defaultOptions,
+        quality: Math.min(100, Math.max(1, quality)),
+      };
+    case "tiff":
+      return {
+        ...defaultOptions,
+        quality: Math.min(100, Math.max(1, quality)),
+      };
+    case "png":
+      return { ...defaultOptions, compressionLevel: mapPngQuality(quality) };
+    default:
+      return defaultOptions;
+  }
+};
+
+const buildSharpPipeline = (sharp, buffer, opts = {}) => {
+  const { resize = {}, rotate, flip, flop } = opts;
+
+  let pipeline = sharp(buffer);
+
+  // Strip
+  if (resize.strip === true) {
+    pipeline = pipeline.withMetadata(false);
+  } else {
+    pipeline = pipeline.withMetadata();
+  }
+
+  //Resize
+  if (resize.width || resize.height) {
+    const fitMode = FIT_MAP[resize.fit ?? "max"] ?? "inside";
+    pipeline = pipeline.resize({
+      width: resize.width ? parseInt(resize.width) : undefined,
+      height: resize.height ? parseInt(resize.height) : undefined,
+      fit: fitMode,
+      withoutEnlargement: (resize.fit ?? "max") === "max",
+    });
+  }
+
+  //Rotate
+  if (rotate !== undefined && rotate !== 0) {
+    pipeline = pipeline.rotate(parseInt(rotate));
+  }
+
+  //vertical
+  if (flip === true) pipeline = pipeline.flip();
+
+  //horizontal
+  if (flop === true) pipeline = pipeline.flop();
+
+  return pipeline;
+};
+
 module.exports = {
   SHARP_FORMAT_MAP,
   MIME_TO_EXT,
+  buildFormatOptions,
+  mapPngQuality,
+  buildSharpPipeline,
 };
