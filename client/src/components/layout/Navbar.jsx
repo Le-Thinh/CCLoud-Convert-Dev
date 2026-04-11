@@ -10,7 +10,7 @@ const Navbar = () => {
     <nav className="h-13 border-b border-zinc-200 flex items-center px-6 justify-around sticky top-0 bg-white/90 backdrop-blur z-10">
       <Link to="/">
         <span className="text-[15px] font-semibold tracking-tight">
-          CCLoudConvert
+          CCLoud
           <sup className="text-[10px] text-zinc-400 font-normal ml-0.5">
             dev
           </sup>

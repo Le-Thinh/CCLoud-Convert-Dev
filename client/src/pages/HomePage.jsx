@@ -41,7 +41,13 @@ const HomePage = () => {
       updateEntry(setEntries, entry.id, { status: "converting" }),
     );
 
-    const results = await convertMain(pending);
+    const results = await convertMain(pending, (id, result) => {
+      if (result.success) {
+        updateEntry(setEntries, id, { status: "done", result });
+      } else {
+        updateEntry(setEntries, id, { status: "error", error: result.error });
+      }
+    });
 
     results.forEach((r, i) => {
       const id = pending[i].id;
@@ -144,7 +150,7 @@ const HomePage = () => {
           ref={inputRef}
           type="file"
           multiple
-          accept={ACCEPTED}
+          accept={"ACCEPTED"}
           className="hidden"
           onChange={(e) => addFiles(e.target.files)}
         />

@@ -20,7 +20,7 @@ export const detectFiles = async (files) => {
   );
 };
 
-export const convertMain = async (entries) => {
+export const convertMain = async (entries, onFileComplete) => {
   const results = await Promise.allSettled(
     entries.map(async (entry) => {
       const { file, targetMime, opts = {} } = entry;
@@ -36,7 +36,10 @@ export const convertMain = async (entries) => {
       }
 
       const { data } = await convert(fd);
-      return { filename: file.name, success: true, ...data.metadata };
+      const result = { filename: file.name, success: true, ...data.metadata };
+
+      onFileComplete(entry.id, result);
+      return result;
     }),
   );
 
