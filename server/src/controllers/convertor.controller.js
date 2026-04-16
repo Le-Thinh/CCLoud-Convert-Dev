@@ -2,6 +2,7 @@
 
 const { BadRequestError } = require("../core/error.response");
 const { SuccessResponse } = require("../core/success.response");
+const { conversionQueue } = require("../queue/conversion.queue");
 const convertorService = require("../services/convertor.service");
 
 class ConvertorController {
@@ -45,9 +46,50 @@ class ConvertorController {
       }
     }
 
+    const job = await conversionQueue.add("convert", {
+      file: {
+        ...file,
+        buffer: Array.from(file.buffer),
+      },
+      targetMime,
+      opts,
+    });
+
     new SuccessResponse({
-      message: "File converted successfully",
-      metadata: await convertorService.convert({ file, targetMime, opts }),
+      message: "Job queued",
+      metadata: { jobId: job.id },
+    }).send(res);
+  };
+
+  // ENDPOINTS CONVERT
+  getStatusJob = async (req, res, next) => {
+    const { jobId } = req.params;
+    const job = await conversionQueue.getJob(jobId);
+
+    const state = await job.getState();
+    if (state === "completed") {
+      return new SuccessResponse({
+        message: "Job completed",
+        metadata: {
+          state,
+          result: job.returnvalue,
+        },
+      }).send(res);
+    }
+
+    if (state === "failed") {
+      return new SuccessResponse({
+        message: "Job failed",
+        metadata: {
+          state,
+          error: job.failedReason,
+        },
+      }).send(res);
+    }
+
+    new SuccessResponse({
+      message: "Job in progress",
+      metadata: { state },
     }).send(res);
   };
 

@@ -10,6 +10,9 @@ const asyncHandler = require("../../helper/asyncHandler");
 
 const router = express.Router();
 
+// polling endpoint convert
+router.get("/jobs/:jobId", asyncHandler(convertorController.getStatusJob));
+
 router.post(
   "/detectFile",
   uploadMemory.single("file"),
@@ -39,4 +42,5 @@ router.post(
   uploadMemory.array("files", 5),
   asyncHandler(convertorController.convertBatchFiles),
 );
+
 module.exports = router;

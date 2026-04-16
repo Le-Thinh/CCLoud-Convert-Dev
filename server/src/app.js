@@ -38,6 +38,9 @@ app.use(
 );
 app.use(compression());
 
+//init bullmq worker
+require("./queue/conversion.worker.js");
+
 //Init DB
 require("./db/init.mongodb");
 

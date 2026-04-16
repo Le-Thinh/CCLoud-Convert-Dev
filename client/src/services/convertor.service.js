@@ -1,15 +1,46 @@
 "use strict";
 
-import { convert, detectFile } from "../api/convert";
+import { convert, detectFile, getJobStatus } from "../api/convert";
 
-export const detectFiles = async (files) => {
+const POLL_INTERVAL = 2000; // 2 giây
+const POLL_TIMEOUT = 120000; // 2 phút
+
+const pollUntilComplete = (jobId, onComplete) => {
+  return new Promise((resolve, reject) => {
+    const startTime = Date.now();
+
+    const poll = async () => {
+      if (Date.now() - startTime > POLL_TIMEOUT) {
+        reject(new Error("Polling timed out"));
+      }
+      try {
+        const { data } = await getJobStatus(jobId);
+
+        const { state, result, error } = data.metadata;
+        if (state === "completed") return resolve(result);
+        if (state === "failed") return reject(new Error(error ?? "Job failed"));
+
+        setTimeout(poll, POLL_INTERVAL);
+      } catch (error) {
+        reject(error);
+      }
+    };
+    poll();
+  });
+};
+
+export const detectFiles = async (files, onFileComplete) => {
   const results = await Promise.allSettled(
     files.map(async (file) => {
       const fd = new FormData();
       fd.append("file", file);
       const { data } = await detectFile(fd);
 
-      return { filename: file.name, success: true, ...data.metadata };
+      const result = { filename: file.name, success: true, ...data.metadata };
+
+      const id = `${file.name}-${file.size}`;
+      onFileComplete(id, result);
+      return result;
     }),
   );
 
@@ -36,10 +67,17 @@ export const convertMain = async (entries, onFileComplete) => {
       }
 
       const { data } = await convert(fd);
-      const result = { filename: file.name, success: true, ...data.metadata };
+      const { jobId } = data.metadata;
 
-      onFileComplete(entry.id, result);
-      return result;
+      const result = pollUntilComplete(jobId);
+      const finalResult = {
+        filename: file.name,
+        success: true,
+        ...result.metadata,
+      };
+
+      onFileComplete(entry.id, finalResult);
+      return finalResult;
     }),
   );
 

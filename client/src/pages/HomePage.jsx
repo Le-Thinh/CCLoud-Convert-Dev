@@ -41,20 +41,11 @@ const HomePage = () => {
       updateEntry(setEntries, entry.id, { status: "converting" }),
     );
 
-    const results = await convertMain(pending, (id, result) => {
+    await convertMain(pending, (id, result) => {
       if (result.success) {
         updateEntry(setEntries, id, { status: "done", result });
       } else {
         updateEntry(setEntries, id, { status: "error", error: result.error });
-      }
-    });
-
-    results.forEach((r, i) => {
-      const id = pending[i].id;
-      if (r.success) {
-        updateEntry(setEntries, id, { status: "done", result: r });
-      } else {
-        updateEntry(setEntries, id, { status: "error", error: r.error });
       }
     });
 
@@ -96,14 +87,12 @@ const HomePage = () => {
     setEntries((prev) => [...prev, ...newEntries]);
 
     try {
-      const results = await detectFiles(newFiles);
-      results.forEach((r) => {
-        if (!r.success) return;
-        const matchedFile = newFiles.find((f) => f.name === r.filename);
-        if (!matchedFile) return;
-        const id = `${r.filename}-${matchedFile.size}`;
-        const allowedMimes = flattenSuggest(r.suggestConvert);
-        updateEntry(setEntries, id, { sourceMime: r.mimeType, allowedMimes });
+      await detectFiles(newFiles, (id, result) => {
+        const allowedMimes = flattenSuggest(result.suggestConvert);
+        updateEntry(setEntries, id, {
+          sourceMime: result.mimeType,
+          allowedMimes,
+        });
       });
     } catch (err) {
       console.error("detectFile failed:", err);
@@ -207,6 +196,11 @@ const HomePage = () => {
           </div>
         ) : (
           <div className="w-full py-4">
+            <p className="text-[13px] font-bold text-zinc-900 mb-2">
+              Nếu bạn thấy trang web không phản hồi, hãy đợi khoảng 1p nhé. Vì
+              dự án đang ở giai đoạn thử nghiệm có cold start nên sẽ mất 1
+              khoảng thời gian để khởi động lại server.
+            </p>
             <div className="space-y-2 mb-4">
               {entries.map((entry) => (
                 <FileRow
