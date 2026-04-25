@@ -2,7 +2,7 @@
 
 import { convert, detectFile, getJobStatus } from "../api/convert";
 
-const POLL_INTERVAL = 2000; // 2 giây
+const POLL_INTERVAL = 1500; // 2 giây
 const POLL_TIMEOUT = 120000; // 2 phút
 
 const pollUntilComplete = (jobId, onComplete) => {
@@ -11,7 +11,7 @@ const pollUntilComplete = (jobId, onComplete) => {
 
     const poll = async () => {
       if (Date.now() - startTime > POLL_TIMEOUT) {
-        reject(new Error("Polling timed out"));
+        return reject(new Error("Polling timed out"));
       }
       try {
         const { data } = await getJobStatus(jobId);
@@ -63,17 +63,16 @@ export const convertMain = async (entries, onFileComplete) => {
       // opts nếu có — ví dụ quality, margin, resize
       if (Object.keys(opts).length > 0) {
         fd.append("opts", JSON.stringify(opts));
-        console.log(opts);
       }
 
       const { data } = await convert(fd);
       const { jobId } = data.metadata;
 
-      const result = pollUntilComplete(jobId);
+      const result = await pollUntilComplete(jobId);
       const finalResult = {
         filename: file.name,
         success: true,
-        ...result.metadata,
+        ...result,
       };
 
       onFileComplete(entry.id, finalResult);
@@ -81,13 +80,20 @@ export const convertMain = async (entries, onFileComplete) => {
     }),
   );
 
-  return results.map((r, i) =>
-    r.status === "fulfilled"
-      ? r.value
-      : {
-          filename: entries[i].file.name,
-          success: false,
-          error: r.reason?.message ?? "Conversion failed",
-        },
-  );
+  return results.map((r, i) => {
+    if (r.status === "fulfilled") return r.value;
+
+    // Nếu poll thất bại, gọi callback với error
+    onFileComplete(entries[i].id, {
+      filename: entries[i].file.name,
+      success: false,
+      error: r.reason?.message ?? "Conversion failed",
+    });
+
+    return {
+      filename: entries[i].file.name,
+      success: false,
+      error: r.reason?.message ?? "Conversion failed",
+    };
+  });
 };

@@ -38,7 +38,7 @@ app.use(
 );
 app.use(compression());
 
-//init bullmq worker
+//init bullmq
 require("./queue/conversion.worker.js");
 
 //Init DB

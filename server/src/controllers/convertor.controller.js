@@ -2,6 +2,7 @@
 
 const { BadRequestError } = require("../core/error.response");
 const { SuccessResponse } = require("../core/success.response");
+const ConversionJobRepo = require("../models/repositories/conversion-job.model");
 const { conversionQueue } = require("../queue/conversion.queue");
 const convertorService = require("../services/convertor.service");
 
@@ -55,6 +56,12 @@ class ConvertorController {
       opts,
     });
 
+    await ConversionJobRepo.createPendingJob({
+      jobId: job.id,
+      targetFormat: targetMime,
+      isGuest: true,
+    });
+
     new SuccessResponse({
       message: "Job queued",
       metadata: { jobId: job.id },
@@ -64,32 +71,33 @@ class ConvertorController {
   // ENDPOINTS CONVERT
   getStatusJob = async (req, res, next) => {
     const { jobId } = req.params;
-    const job = await conversionQueue.getJob(jobId);
+    const job = await ConversionJobRepo.getJobStatus(jobId);
 
-    const state = await job.getState();
-    if (state === "completed") {
+    if (!job) throw new BadRequestError("Job not found");
+
+    if (job.status === "completed") {
       return new SuccessResponse({
         message: "Job completed",
         metadata: {
-          state,
-          result: job.returnvalue,
+          state: job.status,
+          result: job.result,
         },
       }).send(res);
     }
 
-    if (state === "failed") {
+    if (job.status === "failed") {
       return new SuccessResponse({
         message: "Job failed",
         metadata: {
-          state,
-          error: job.failedReason,
+          state: job.status,
+          error: job.errorReason,
         },
       }).send(res);
     }
 
     new SuccessResponse({
       message: "Job in progress",
-      metadata: { state },
+      metadata: { state: job.status },
     }).send(res);
   };
 

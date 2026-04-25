@@ -212,16 +212,7 @@ class ConvertorService {
       size: outputBuffer.length,
     };
 
-    //5. Save conversion job to DB
-    const job = await ConversionJobRepo.createConversionJob({
-      original: original,
-      converted: converted,
-      targetFormat: targetMime,
-      status: "completed",
-      options: opts,
-    });
-
-    if (!job) throw new Error("Failed to save conversion job to database");
+    //5. Save conversion job to DB -> Queue tạo
 
     //Result
     const savedBytes = file.buffer.length - outputBuffer.length;
@@ -429,17 +420,7 @@ class ConvertorService {
 
     const isGuest = userId === null ? true : false;
 
-    //5. Save conversion job to DB
-    const job = await ConversionJobRepo.createConversionJob({
-      original: original,
-      converted: converted,
-      targetFormat: "application/pdf",
-      status: "completed",
-      options: opts,
-      isGuest,
-    });
-
-    if (!job) throw new Error("Failed to save conversion job to database");
+    //5. Save conversion job to DB -> Queue tạo
 
     //7. Result
     return {

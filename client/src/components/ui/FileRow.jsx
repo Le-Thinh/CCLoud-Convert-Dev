@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { fmtSize, triggerDownload } from "../../utils";
 import FormatSelect from "../FormatSelect";
 import { StatusBadge } from "../../assets/statusFile";
@@ -24,7 +24,8 @@ const FileRow = ({
   const isActive = status === "converting";
   const id = `${file.name}-${file.size}`;
 
-  const meta = result?.metadata;
+  const meta = result;
+
   const convertedExt =
     meta?.converted?.format?.toUpperCase() ??
     targetMime?.split("/").pop().toUpperCase();

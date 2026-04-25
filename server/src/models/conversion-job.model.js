@@ -17,10 +17,16 @@ const conversionJobSchema = new Schema(
       default: false,
     },
 
+    jobId: { type: String, unique: true },
+    errorReason: { type: String, default: null },
+
     // Original file info
     original_key: { type: String, required: true, unique: true },
     original_mimeType: { type: String },
     original_size: { type: Number },
+
+    // original: { type: Object, default: {} },
+    // converted: { type: Object, default: {} },
 
     // Converted file info
     converted_key: { type: String, required: true, unique: true },
@@ -29,7 +35,7 @@ const conversionJobSchema = new Schema(
 
     target_format: { type: String, required: true },
     options: { type: Object, default: {} },
-
+    result: { type: Object, default: null },
     status: {
       type: String,
       enum: ["pending", "processing", "completed", "failed"],

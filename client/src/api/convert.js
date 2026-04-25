@@ -20,13 +20,11 @@ export const detectFile = async (formData) => {
   );
   return response;
 };
-
-export const convert = async (formData) => {
-  const response = await request.post(`${URL_BASE_CONVERT}/convert`, formData);
-  return response;
-};
-
 export const getJobStatus = async (jobId) => {
   const response = await request.get(`${URL_BASE_CONVERT}/jobs/${jobId}`);
+  return response;
+};
+export const convert = async (formData) => {
+  const response = await request.post(`${URL_BASE_CONVERT}/convert`, formData);
   return response;
 };

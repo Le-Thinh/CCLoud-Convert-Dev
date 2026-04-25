@@ -16,6 +16,7 @@ const createEntry = (file) => ({
   status: "idle",
   result: null,
   error: null,
+  opts: {},
 });
 
 const HomePage = () => {
@@ -139,7 +140,7 @@ const HomePage = () => {
           ref={inputRef}
           type="file"
           multiple
-          accept={"ACCEPTED"}
+          accept={ACCEPTED}
           className="hidden"
           onChange={(e) => addFiles(e.target.files)}
         />
